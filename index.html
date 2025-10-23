@@ -6,12 +6,81 @@
 <title>Zillow Metro Outlook – Filterable Table</title>
 <link rel="preconnect" href="https://unpkg.com">
 <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
+  /* Tabs */
+.tabs {
+  display:flex; gap:8px; align-items:center; padding:10px 16px; border-bottom:1px solid #e5e7eb;
+}
+.tabbtn {
+  padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-radius:8px; cursor:pointer;
+}
+.tabbtn.active { background:#111827; color:#fff; border-color:#111827; }
+
+/* Map view shell */
+#mapView { display:none; height:75vh; }
+#map     { height:100%; width:100%; border-top:1px solid #e5e7eb; }
+
+/* Simple legend */
+.leaflet-control.legend {
+  background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #e5e7eb; font-size:12px;
+}
+.legend .swatch { display:inline-block; width:14px; height:10px; margin-right:6px; vertical-align:middle; }
+
   :root { --ok:#106b21; --bad:#a2121c; --muted:#6b7280; }
   body { margin:0; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#111827; }
   header { padding:14px 16px; border-bottom:1px solid #e5e7eb; background:#fafafa; display:grid; gap:6px; }
   h1 { margin:0; font-size:18px; }
   .muted { color:var(--muted); }
+  <!-- Tabs -->
+<div class="tabs">
+  <button id="tabTable" class="tabbtn active" type="button">Table</button>
+  <button id="tabMap"   class="tabbtn"         type="button">Map</button>
+</div>
+  <!-- Map container -->
+<div id="mapView"></div>
+
+<!-- Script to handle tab switching -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const tabTable = document.getElementById('tabTable');
+  const tabMap = document.getElementById('tabMap');
+  const mapView = document.getElementById('mapView');
+  const dataSection = document.querySelector('.controls').parentElement; // main table wrapper
+
+  let map; // will hold Leaflet map instance
+
+  // Switch to Table view
+  tabTable.addEventListener('click', () => {
+    tabTable.classList.add('active');
+    tabMap.classList.remove('active');
+    dataSection.style.display = 'block';
+    mapView.style.display = 'none';
+  });
+
+  // Switch to Map view
+  tabMap.addEventListener('click', () => {
+    tabMap.classList.add('active');
+    tabTable.classList.remove('active');
+    dataSection.style.display = 'none';
+    mapView.style.display = 'block';
+
+    // Initialize map only once
+    if (!map) {
+      map = L.map('mapView').setView([37.8, -96], 4); // center of US
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 10,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+      }).addTo(map);
+    }
+
+    setTimeout(() => { map.invalidateSize(); }, 200);
+  });
+});
+</script>
+
   .controls { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:10px; padding:10px 16px; border-bottom:1px solid #e5e7eb; }
   .card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
   label { display:block; font-size:12px; color:#374151; margin-bottom:4px; }
@@ -43,7 +112,7 @@
   <div class="muted">Data © Zillow® — <a href="https://www.zillow.com/research/data/" target="_blank" rel="noopener">Home Values Forecasts → Metro &amp; US</a>. Uses your latest CSV via <code>data/manifest.json</code>.</div>
   <div id="status" class="muted">Loading…</div>
 </header>
-
+<div id="tableView">
 <section class="controls">
   <div class="card">
     <label for="dateSelect">Target date column</label>
@@ -97,7 +166,7 @@
     <tbody></tbody>
   </table>
 </section>
-
+</div> <!-- end #tableView -->
 <footer>
   Prepared by ABG. Green = growth (≥ 0%), Red = decline (&lt; 0%). Table is sortable — click a header.
 </footer>
@@ -117,7 +186,7 @@ const maxVal     = document.getElementById('maxVal');
 const searchBox  = document.getElementById('searchBox');
 const resetBtn   = document.getElementById('reset');
 const downloadBtn= document.getElementById('downloadCsv');
-const tbody      = document.querySelector('#tbl tbody');
+const dataSection = document.getElementById('tableView');
 
 let rawRows = [], headers = [], dateCols = [];
 let currentDateKey = null;     // active date column (e.g., 2026-09-30)
