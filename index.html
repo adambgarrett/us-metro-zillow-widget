@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zillow Metro Data Viewer</title>
+</head>
+<body>
+  <h1>🏙️ Zillow Metro Data Viewer</h1>
+  <p>This widget automatically loads the latest Zillow metro CSV from GitHub.</p>
+
+  <pre id="preview" style="background:#f8f9fa;padding:10px;border-radius:8px;max-height:300px;overflow:auto;"></pre>
+
+  <script>
+  async function loadZillowData() {
+    try {
+      const manifestUrl = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/manifest.json";
+      const manifestResponse = await fetch(manifestUrl);
+      const manifest = await manifestResponse.json();
+
+      const csvFile = manifest.current;
+      const csvUrl = `https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/${encodeURIComponent(csvFile)}`;
+
+      console.log("🔄 Latest Zillow data file:", csvUrl);
+
+      const csvResponse = await fetch(csvUrl);
+      const csvText = await csvResponse.text();
+
+      const preview = csvText.split("\n").slice(0, 10).join("\n");
+      document.getElementById("preview").textContent = preview;
+    } catch (err) {
+      console.error("❌ Failed to load Zillow data:", err);
+      document.getElementById("preview").textContent = "Error loading data.";
+    }
+  }
+  loadZillowData();
+  </script>
+</body>
+</html>
