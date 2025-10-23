@@ -103,101 +103,158 @@
 
 <script>
 const MANIFEST_URL = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/manifest.json";
-const DATA_BASE = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/";
+const DATA_BASE     = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/";
 
-const statusEl = document.getElementById('status');
+const statusEl   = document.getElementById('status');
 const dateSelect = document.getElementById('dateSelect');
-const chipOneYear = document.getElementById('chipOneYear');
-const chipLatest  = document.getElementById('chipLatest');
-const minRange = document.getElementById('minRange');
-const maxRange = document.getElementById('maxRange');
-const minVal   = document.getElementById('minVal');
-const maxVal   = document.getElementById('maxVal');
-const searchBox = document.getElementById('searchBox');
-const resetBtn = document.getElementById('reset');
-const downloadBtn = document.getElementById('downloadCsv');
-const tbody = document.querySelector('#tbl tbody');
+const chipOneYear= document.getElementById('chipOneYear');
+const chipLatest = document.getElementById('chipLatest');
+const minRange   = document.getElementById('minRange');
+const maxRange   = document.getElementById('maxRange');
+const minVal     = document.getElementById('minVal');
+const maxVal     = document.getElementById('maxVal');
+const searchBox  = document.getElementById('searchBox');
+const resetBtn   = document.getElementById('reset');
+const downloadBtn= document.getElementById('downloadCsv');
+const tbody      = document.querySelector('#tbl tbody');
 
-let rawRows = [];       // parsed CSV rows (objects)
-let headers = [];       // header names
-let dateCols = [];      // detected date columns
-let baseKey = 'BaseDate'; // Zillow column name for base values
-let currentDateKey = null; // active target date column
-let oneYearKey = null;  // best-fit 1-year date
-let rowsEnriched = [];  // derived values for table
-let sortKey = 'pct', sortDir = -1; // default sort by percent desc
+let rawRows = [], headers = [], dateCols = [];
+let hasBaseDate = false;
+let baseKey = 'BaseDate';        // if present
+let currentDateKey = null;       // active target column
+let oneYearKey = null;           // best ~+12m target column
+let pairedBaseForTarget = null;  // function(targetKey) -> baseKey
+let rowsEnriched = [];
+let sortKey = 'pct', sortDir = -1;
 
-function normalizeName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+const norm = s => String(s ?? '').trim();
+const toDate = s => {
+  if (!s) return NaN;
+  // accept YYYY, YYYY-MM, YYYY-MM-DD
+  const m = String(s).match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/);
+  if (!m) return NaN;
+  const [_, Y, M='01', D='01'] = m;
+  return new Date(Number(Y), Number(M)-1, Number(D));
+};
 
 function detectDateColumns(cols){
-  return cols.filter(h => /^\d{4}(-\d{2}){0,2}$/.test(h));
+  return cols.filter(h => /^\d{4}(?:-\d{2})?(?:-\d{2})?$/.test(h)).sort((a,b)=>toDate(a)-toDate(b));
 }
 
-function pickOneYearKey(rows, dcols){
-  // Based on BaseDate + ~12 months
-  const count = new Map();
-  for (const r of rows){
-    const base = new Date(r[baseKey]);
-    if (isNaN(+base)) continue;
-    const target = new Date(base); target.setFullYear(base.getFullYear()+1);
-    let best=null, bestDiff=Infinity;
-    for (const c of dcols){
-      const d = new Date(c);
-      if (isNaN(+d)) continue;
-      const diff = Math.abs(d - target);
-      if (diff < bestDiff){ bestDiff=diff; best=c; }
-    }
-    if (best) count.set(best, (count.get(best)||0)+1);
+function findNearest(dates, target){
+  // dates: array of keys (strings), target: JS Date
+  let best=null, bestDiff=Infinity;
+  for (const k of dates){
+    const d = toDate(k); if (isNaN(+d)) continue;
+    const diff = Math.abs(d - target);
+    if (diff < bestDiff){ bestDiff=diff; best=k; }
   }
-  let pick=null, max=0;
-  for (const [k,v] of count.entries()){ if (v>max){ max=v; pick=k; } }
-  return pick || (dcols.at(-1) || null);
+  return best;
 }
 
-function enrich(rows, targetCol){
+function derivePairingFunctions(){
+  // If BaseDate exists, 1-yr target ~ BaseDate + 12m; base is exactly BaseDate
+  if (hasBaseDate){
+    pairedBaseForTarget = (targetKey) => baseKey;
+    oneYearKey = findNearest(dateCols, new Date(new Date(rawRows[0][baseKey]).setFullYear(new Date(rawRows[0][baseKey]).getFullYear()+1)));
+    // Prefer the modal (+12m from each row) instead of one row’s base:
+    const counts = new Map();
+    for (const r of rawRows){
+      const bd = new Date(r[baseKey]); if (isNaN(+bd)) continue;
+      const t  = new Date(bd); t.setFullYear(bd.getFullYear()+1);
+      const near = findNearest(dateCols, t); if (near) counts.set(near, (counts.get(near)||0)+1);
+    }
+    let pick = oneYearKey, max = 0;
+    for (const [k,v] of counts) if (v>max) { max=v; pick=k; }
+    oneYearKey = pick || oneYearKey || dateCols.at(-1);
+  } else {
+    // No BaseDate -> target = latest date; base = date ~12m earlier
+    const latest = dateCols.at(-1);
+    oneYearKey = latest;
+    pairedBaseForTarget = (targetKey) => {
+      const t = toDate(targetKey); if (isNaN(+t)) return null;
+      const b = new Date(t); b.setFullYear(t.getFullYear()-1);
+      return findNearest(dateCols, b);
+    };
+  }
+}
+
+function pickInitialTarget(){
+  // If we have a oneYearKey from the logic above, use it; else fallback to latest
+  currentDateKey = oneYearKey || dateCols.at(-1) || null;
+}
+
+function getName(r){
+  // Try common Zillow headers
+  return norm(r.RegionName ?? r.Name ?? r.Metro ?? r.MSA ?? r['Region Name'] ?? '');
+}
+function getCbsa(r){
+  return norm(r.CBSA ?? r.CBSAFP ?? r.cbsa ?? '');
+}
+
+function enrichRows(targetKey){
+  const baseKeyForTarget = pairedBaseForTarget(targetKey);
   const out = [];
-  for (const r of rows){
-    const name = r.RegionName || r.Name || r.Metro || r.MSA || r['Region Name'] || '';
-    const base = Number(r[baseKey]);
-    const target = Number(r[targetCol]);
-    if (!name || !Number.isFinite(base) || !Number.isFinite(target)) continue;
-    const pct = ((target - base) / base) * 100;
-    const cbsa = r.CBSA || r.CBSAFP || r.cbsa || '';
-    out.push({ NAME: name, CBSAFP: cbsa, base, target, pct });
+  for (const r of rawRows){
+    const name = getName(r);
+    if (!name) continue;
+
+    const baseValue = Number(r[hasBaseDate ? baseKey : baseKeyForTarget]);
+    const targetValue = Number(r[targetKey]);
+
+    if (!Number.isFinite(targetValue)) continue;
+
+    // When there is no explicit base value (no BaseDate), compute percent using paired date column
+    let pct;
+    if (hasBaseDate){
+      if (!Number.isFinite(baseValue)) continue;
+      pct = ((targetValue - baseValue) / baseValue) * 100;
+    } else {
+      const baseVal = Number(r[baseKeyForTarget]);
+      if (!Number.isFinite(baseVal) || baseVal === 0) continue;
+      pct = ((targetValue - baseVal) / baseVal) * 100;
+    }
+
+    out.push({
+      NAME: name,
+      CBSAFP: getCbsa(r),
+      base: hasBaseDate ? baseValue : Number(r[baseKeyForTarget]),
+      target: targetValue,
+      pct
+    });
   }
   return out;
 }
 
 function render(){
-  const q = normalizeName(searchBox.value);
   const lo = Number(minRange.value), hi = Number(maxRange.value);
+  const q  = norm(searchBox.value).toLowerCase();
   minVal.textContent = `${lo}%`; maxVal.textContent = `${hi}%`;
 
   let data = rowsEnriched.filter(r =>
-    r.pct >= lo && r.pct <= hi && (!q || normalizeName(r.NAME).includes(q))
+    r.pct >= lo && r.pct <= hi && (!q || r.NAME.toLowerCase().includes(q))
   );
 
   data.sort((a,b)=>{
-    const vA = a[sortKey], vB = b[sortKey];
-    if (vA < vB) return -1*sortDir;
-    if (vA > vB) return  1*sortDir;
+    const A=a[sortKey], B=b[sortKey];
+    if (A<B) return -1*sortDir;
+    if (A>B) return  1*sortDir;
     return 0;
   });
 
-  const rows = data.map(r=>{
-    const cls = (r.pct < 0) ? 'negative' : 'positive';
+  tbody.innerHTML = data.map(r=>{
+    const cls  = r.pct < 0 ? 'negative' : 'positive';
     const pill = r.pct < 0 ? `<span class="pill neg">${r.pct.toFixed(1)}%</span>`
                            : `<span class="pill pos">${r.pct.toFixed(1)}%</span>`;
     return `<tr class="${cls}">
       <td>${r.NAME}</td>
-      <td>${r.CBSAFP||''}</td>
+      <td>${r.CBSAFP}</td>
       <td>${Number.isFinite(r.base)?r.base.toLocaleString():''}</td>
       <td>${Number.isFinite(r.target)?r.target.toLocaleString():''}</td>
       <td>${pill}</td>
     </tr>`;
-  }).join('');
+  }).join('') || `<tr><td colspan="5" class="muted">No rows match your filters.</td></tr>`;
 
-  tbody.innerHTML = rows || `<tr><td colspan="5" class="muted">No rows match your filters.</td></tr>`;
   statusEl.textContent = `Showing ${data.length.toLocaleString()} of ${rowsEnriched.length.toLocaleString()} metros — target: ${currentDateKey}`;
 }
 
@@ -206,74 +263,92 @@ function attachSort(){
     th.style.cursor = 'pointer';
     th.addEventListener('click', ()=>{
       const key = th.dataset.key;
-      if (sortKey === key){ sortDir *= -1; } else { sortKey = key; sortDir = (key==='NAME'||key==='CBSAFP') ? 1 : -1; }
+      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = (key==='NAME'||key==='CBSAFP')?1:-1; }
       render();
     });
   });
 }
 
-function setPreset(type){
-  if (type==='pos'){ minRange.value = 0; maxRange.value = 30; }
-  else if (type==='neg'){ minRange.value = -30; maxRange.value = -0.1; }
+function setPreset(which){
+  if (which==='pos'){ minRange.value = 0; maxRange.value = 30; }
+  else if (which==='neg'){ minRange.value = -30; maxRange.value = -0.1; }
   else { minRange.value = -30; maxRange.value = 30; }
   render();
 }
 
 async function load(){
-  statusEl.textContent = 'Loading manifest…';
-  const man = await fetch(MANIFEST_URL, {cache:'no-store'}).then(r=>r.json());
-  const csvUrl = DATA_BASE + encodeURIComponent(man.current);
-  statusEl.textContent = 'Fetching CSV…';
-  const csvText = await fetch(csvUrl).then(r=>r.text());
-  const parsed = Papa.parse(csvText, {header:true, dynamicTyping:true, skipEmptyLines:true});
-  rawRows = parsed.data;
-  headers = parsed.meta.fields || Object.keys(rawRows[0]||{});
-  dateCols = detectDateColumns(headers);
-  oneYearKey = pickOneYearKey(rawRows, dateCols);
-  currentDateKey = oneYearKey || dateCols.at(-1);
-  // populate date dropdown
-  dateSelect.innerHTML = dateCols.map(c=>`<option value="${c}">${c}</option>`).join('');
-  if (currentDateKey){ dateSelect.value = currentDateKey; }
-  rowsEnriched = enrich(rawRows, currentDateKey);
-  attachSort();
-  render();
-  // chip states
-  chipOneYear.classList.add('active');
+  try{
+    statusEl.textContent = 'Loading manifest…';
+    const man = await fetch(MANIFEST_URL, {cache:'no-store'}).then(r=>r.json());
+    const csvUrl = DATA_BASE + encodeURIComponent(man.current);
+
+    statusEl.textContent = 'Fetching CSV…';
+    const csvText = await fetch(csvUrl).then(r=>r.text());
+
+    const parsed = Papa.parse(csvText, {header:true, dynamicTyping:true, skipEmptyLines:true});
+    rawRows = parsed.data;
+    headers = parsed.meta.fields || Object.keys(rawRows[0]||{});
+    if (!rawRows.length){ statusEl.textContent = 'CSV parsed but contains 0 rows.'; return; }
+
+    // Detect dates + BaseDate presence
+    dateCols = detectDateColumns(headers);
+    hasBaseDate = headers.includes(baseKey);
+
+    if (!dateCols.length){
+      statusEl.textContent = 'No date columns detected (expected YYYY-MM or YYYY-MM-DD).';
+      return;
+    }
+
+    // Build pairing rules and initial target
+    derivePairingFunctions();
+    pickInitialTarget();
+
+    // Populate date dropdown & chips
+    dateSelect.innerHTML = dateCols.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if (currentDateKey) dateSelect.value = currentDateKey;
+    chipOneYear.classList.add('active');
+
+    rowsEnriched = enrichRows(currentDateKey);
+    attachSort();
+    render();
+  } catch(err){
+    console.error(err);
+    statusEl.textContent = 'Error loading data.';
+  }
 }
 
+// UI wiring
 document.querySelectorAll('.chip[data-preset]').forEach(el=>{
   el.addEventListener('click', ()=> setPreset(el.dataset.preset));
 });
 chipOneYear.addEventListener('click', ()=>{
   chipOneYear.classList.add('active'); chipLatest.classList.remove('active');
-  currentDateKey = oneYearKey || currentDateKey;
-  if (currentDateKey){ dateSelect.value = currentDateKey; rowsEnriched = enrich(rawRows, currentDateKey); render(); }
+  currentDateKey = oneYearKey || dateCols.at(-1);
+  if (currentDateKey){ dateSelect.value=currentDateKey; rowsEnriched = enrichRows(currentDateKey); render(); }
 });
 chipLatest.addEventListener('click', ()=>{
   chipLatest.classList.add('active'); chipOneYear.classList.remove('active');
   currentDateKey = dateCols.at(-1);
-  if (currentDateKey){ dateSelect.value = currentDateKey; rowsEnriched = enrich(rawRows, currentDateKey); render(); }
+  if (currentDateKey){ dateSelect.value=currentDateKey; rowsEnriched = enrichRows(currentDateKey); render(); }
 });
-
 [minRange, maxRange, searchBox].forEach(el => el.addEventListener('input', render));
 dateSelect.addEventListener('change', ()=>{
   chipOneYear.classList.remove('active'); chipLatest.classList.remove('active');
   currentDateKey = dateSelect.value;
-  rowsEnriched = enrich(rawRows, currentDateKey);
+  rowsEnriched = enrichRows(currentDateKey);
   render();
 });
 resetBtn.addEventListener('click', ()=>{
   searchBox.value = '';
   minRange.value = -30; maxRange.value = 30;
-  if (oneYearKey){ dateSelect.value = oneYearKey; currentDateKey = oneYearKey; }
-  rowsEnriched = enrich(rawRows, currentDateKey);
+  currentDateKey = oneYearKey || dateCols.at(-1);
+  if (currentDateKey) dateSelect.value = currentDateKey;
+  rowsEnriched = enrichRows(currentDateKey);
   render();
 });
-
 downloadBtn.addEventListener('click', ()=>{
-  // Export currently filtered rows to CSV
   const lo = Number(minRange.value), hi = Number(maxRange.value);
-  const q = searchBox.value.trim().toLowerCase();
+  const q  = searchBox.value.trim().toLowerCase();
   const filtered = rowsEnriched.filter(r =>
     r.pct >= lo && r.pct <= hi && (!q || r.NAME.toLowerCase().includes(q))
   );
@@ -287,14 +362,11 @@ downloadBtn.addEventListener('click', ()=>{
   ].join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `metros_filtered_${currentDateKey}.csv`; a.click();
+  const a = document.createElement('a'); a.href=url; a.download=`metros_filtered_${currentDateKey}.csv`; a.click();
   URL.revokeObjectURL(url);
 });
 
-load().catch(err=>{
-  console.error(err);
-  statusEl.textContent = 'Error loading data.';
-});
+load();
 </script>
 
 </body>
