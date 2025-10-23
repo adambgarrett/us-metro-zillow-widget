@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>US Metro Outlook — 1-Year % Change</title>
+
+<link rel="preconnect" href="https://unpkg.com">
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root { --green:#0a7b0a; --red:#c22; --muted:#6b7280; }
+* { box-sizing: border-box; }
+body { margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#111827; background:#fff; }
+header { padding:14px 16px; border-bottom:1px solid #e5e7eb; background:#fafafa; display:grid; gap:6px; }
+h1 { margin:0; font-size:18px; }
+.muted { color:var(--muted); }
+
+/* Global toolbar (both views) */
+.toolbar { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap:10px; padding:10px 16px; border-bottom:1px solid #e5e7eb; background:#fff; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px; }
+label { display:block; font-size:12px; color:#374151; margin-bottom:6px; }
+select, input[type=text], button { width:100%; font:14px/1.4 inherit; }
+.btn { padding:8px 10px; border:1px solid #d1d5db; background:#fff; border-radius:8px; cursor:pointer; }
+.btn:hover { background:#f3f4f6; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chip { font-size:12px; padding:4px 8px; border:1px solid #d1d5db; border-radius:999px; cursor:pointer; user-select:none; }
+.chip.active { background:#111827; color:#fff; border-color:#111827; }
+
+/* Tabs */
+.tabs { display:flex; gap:8px; align-items:center; padding:10px 16px; border-bottom:1px solid #e5e7eb; background:#fafafa; }
+.tabbtn { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-radius:8px; cursor:pointer; }
+.tabbtn.active { background:#111827; color:#fff; border-color:#111827; }
+
+/* Map & Table containers */
+#mapView { display:block; height:76vh; position:relative; }
+#map { height:100%; width:100%; border-top:1px solid #e5e7eb; }
+#tableView { display:none; }
+.wrap { overflow:auto; max-width:100vw; padding:0 16px 16px; }
+
+table { width:100%; border-collapse:collapse; }
+th,td { padding:8px 10px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+th { background:#fafafa; font-weight:600; text-align:left; position:sticky; top:0; }
+tbody tr.negative { background:#fff7f7; }
+tbody tr.positive { background:#f5fff6; }
+.pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; color:#fff; }
+.pill.pos { background:var(--green); } 
+.pill.neg { background:var(--red); }
+tbody tr.usRow { border-top:2px solid #111827; border-bottom:2px solid #111827; background:#fffef2; }
+
+footer { padding:10px 16px; border-top:1px solid #e5e7eb; background:#fafafa; font-size:12px; }
+
+/* Dual-handle slider */
+.range-card { display:flex; flex-direction:column; gap:8px; }
+.range-wrap { position:relative; height:34px; }
+.range-wrap input[type="range"] {
+  position:absolute; inset:0;
+  margin:0; pointer-events:none; background:transparent; -webkit-appearance:none; appearance:none;
+}
+/* Track */
+.range-wrap input[type="range"]::-webkit-slider-runnable-track { height:8px; border-radius:999px; background:#e5e7eb; }
+.range-wrap input[type="range"]::-moz-range-track { height:8px; border-radius:999px; background:#e5e7eb; }
+/* Thumb */
+.range-wrap input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none; pointer-events:auto;
+  width:18px; height:18px; border-radius:50%; border:1px solid #374151; background:#fff;
+  margin-top:-5px;
+}
+.range-wrap input[type="range"]::-moz-range-thumb {
+  pointer-events:auto; width:18px; height:18px; border-radius:50%; border:1px solid #374151; background:#fff;
+}
+/* Highlight between thumbs */
+.slider-track {
+  position:absolute; height:8px; background:#111827; opacity:.25; border-radius:999px;
+  left:0; right:0; top:50%; transform:translateY(-50%);
+}
+.slider-minmax { font-size:12px; color:#374151; }
+
+/* Legend */
+.legend {
+  position:absolute; z-index:1000; right:12px; bottom:12px;
+  background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; font-size:12px; width:240px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.legend .grad { height:12px; border-radius:6px; margin:6px 0;
+  background: linear-gradient(90deg, var(--red), #ffffff, var(--green));
+}
+.legend .ticks { display:flex; justify-content:space-between; color:#374151; }
+.legend .ticks span { font-variant-numeric: tabular-nums; }
+.legend .muted { font-size:11px; color:#6b7280; }
+
+/* National badge */
+.national-badge {
+  position:absolute; z-index:1000; left:12px; top:12px;
+  background:#fff; border:1px solid #e5e7eb; border-radius:999px; padding:8px 12px; 
+  display:flex; align-items:center; gap:8px; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.05);
+}
+.national-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+.national-label { font-size:12px; font-weight:500; color:#374151; }
+</style>
+</head>
+<body>
+<header>
+  <h1>US Metro Outlook — 1-Year % Change</h1>
+  <div class="muted">Data © Zillow® — <a href="https://www.zillow.com/research/data/" target="_blank" rel="noopener">Home Values Forecasts → Metro &amp; US</a>. Uses your latest CSV via <code>data/manifest.json</code>.</div>
+  <div id="status" class="muted">Loading…</div>
+</header>
+
+<!-- Global controls -->
+<section class="toolbar">
+  <div class="card">
+    <label for="dateSelect">Target date column</label>
+    <select id="dateSelect"></select>
+    <div class="chips" style="margin-top:6px">
+      <span id="chipOneYear" class="chip">1-year (auto)</span>
+      <span id="chipLatest" class="chip active">Latest date</span>
+    </div>
+  </div>
+
+  <div class="card range-card">
+    <label>Filter by 1-yr % range</label>
+    <div class="range-wrap">
+      <div class="slider-track" id="sliderTrack"></div>
+      <input type="range" id="rangeMin" min="-30" max="30" step="0.5" value="-30">
+      <input type="range" id="rangeMax" min="-30" max="30" step="0.5" value="30">
+    </div>
+    <div class="slider-minmax">Range: <span id="rangeLabel">-30% → 30%</span></div>
+    <div class="chips" style="margin-top:6px">
+      <span class="chip" data-preset="pos">Only positive</span>
+      <span class="chip" data-preset="neg">Only negative</span>
+      <span class="chip" data-preset="all">Reset range</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <label for="searchBox">Search metros</label>
+    <input id="searchBox" type="text" placeholder="Type metro name…">
+    <div style="margin-top:8px; display:flex; gap:8px;">
+      <button id="downloadCsv" class="btn">Download filtered CSV</button>
+      <button id="reset" class="btn">Reset</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Update data</label>
+    <div style="display:grid; gap:8px;">
+      <input id="localCsv" type="file" accept=".csv">
+      <small class="muted">Preview only: loads a CSV from your computer (doesn't save to site).</small>
+      <a class="btn" href="https://github.com/adambgarrett/us-metro-zillow-widget/upload/main/data" target="_blank" rel="noopener">Upload CSV to /data (GitHub)</a>
+      <a class="btn" href="https://github.com/adambgarrett/us-metro-zillow-widget/edit/main/data/manifest.json" target="_blank" rel="noopener">Edit manifest.json</a>
+    </div>
+  </div>
+</section>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button id="tabMap" class="tabbtn active" type="button">Map</button>
+  <button id="tabTable" class="tabbtn" type="button">Table</button>
+</div>
+
+<!-- Map view -->
+<div id="mapView">
+  <div id="map"></div>
+  <div class="national-badge" id="natBadge" title="United States 1-year forecast">
+    <span class="national-dot" id="natDot"></span>
+    <span class="national-label">US 1-yr:</span>
+    <span id="natVal" class="pill">—</span>
+  </div>
+  <div class="legend" id="legend">
+    <div><strong>1-year % change</strong></div>
+    <div class="grad" id="legendGrad"></div>
+    <div class="ticks"><span id="tickMin">-30%</span><span id="tickZero">0%</span><span id="tickMax">30%</span></div>
+    <div class="muted">Red = decline, Green = growth. Out-of-range areas are dimmed.</div>
+  </div>
+</div>
+
+<!-- Table view -->
+<div id="tableView">
+  <section class="wrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th data-key="NAME">Metro</th>
+          <th data-key="CBSAFP">CBSA</th>
+          <th data-key="base">Base value</th>
+          <th data-key="target">Target value</th>
+          <th data-key="pct">1-yr %</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</div>
+
+<footer>Prepared by ABG. Red→White→Green legend reflects negative to positive growth. Table is sortable — click a header.</footer>
+
+<script>
+// Config
+const MANIFEST_URL = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/manifest.json";
+const DATA_BASE     = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/";
+const GEOJSON_URL   = "data/us_metros.geojson";
+
+// DOM
+const statusEl=document.getElementById('status'), dateSelect=document.getElementById('dateSelect');
+const chipOneYear=document.getElementById('chipOneYear'), chipLatest=document.getElementById('chipLatest');
+const rangeMin=document.getElementById('rangeMin'), rangeMax=document.getElementById('rangeMax'), sliderTrack=document.getElementById('sliderTrack'), rangeLabel=document.getElementById('rangeLabel');
+const searchBox=document.getElementById('searchBox'), resetBtn=document.getElementById('reset'), localCsv=document.getElementById('localCsv');
+const downloadBtn=document.getElementById('downloadCsv'); 
+const tableView=document.getElementById('tableView'); const mapView=document.getElementById('mapView');
+const tickMin=document.getElementById('tickMin'), tickZero=document.getElementById('tickZero'), tickMax=document.getElementById('tickMax');
+const natDot=document.getElementById('natDot'), natVal=document.getElementById('natVal');
+
+let rawRows=[], headers=[], dateCols=[], currentDateKey=null, oneYearKey=null, rowsEnriched=[], sortKey='pct', sortDir=-1;
+let map, geoLayer;
+
+// Utils
+const norm=s=>String(s??'').trim();
+const toDate=s=>{const m=String(s||'').match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/); if(!m)return NaN; const [_,Y,M='01',D='01']=m; return new Date(+Y,+M-1,+D);};
+const detectDateColumns=cols=>cols.filter(h=>/^\d{4}(?:-\d{2})?(?:-\d{2})?$/.test(h)).sort((a,b)=>toDate(a)-toDate(b));
+function findNearest(dates,target){let best=null,d=1e18;for(const k of dates){const td=toDate(k);if(isNaN(+td))continue;const diff=Math.abs(td-target);if(diff<d){d=diff;best=k;}}return best;}
+function computeOneYearKey(rows){if(!rows.length)return null;const hasBase=headers.includes('BaseDate'); if(!hasBase) return dateCols.at(-1); const counts=new Map(); for(const r of rows){const bd=new Date(r.BaseDate); if(isNaN(+bd))continue; const t=new Date(bd); t.setFullYear(bd.getFullYear()+1); const near=findNearest(dateCols,t); if(near) counts.set(near,(counts.get(near)||0)+1);} let pick=null,max=0; for(const [k,v] of counts) if(v>max){max=v;pick=k;} return pick||dateCols.at(-1);}
+const getName=r=>norm(r.RegionName??r.Name??r.Metro??r.MSA??r['Region Name']??'');
+const getCbsa=r=>norm(r.CBSA??r.CBSAFP??r.cbsa??'');
+
+function lerp(a,b,t){ return a + (b-a)*t; }
+function rgb(r,g,b){ return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`; }
+function colorScale(val, lo, hi){
+  if (!Number.isFinite(val)) return '#bbb';
+  const M = Math.max(Math.abs(lo), Math.abs(hi), 0.0001);
+  let t = (val/M + 1) / 2; t = Math.max(0, Math.min(1, t));
+  const R=[194,34,34], W=[255,255,255], G=[10,123,10];
+  if (t <= 0.5){ const u=t*2; return rgb(lerp(R[0],W[0],u), lerp(R[1],W[1],u), lerp(R[2],W[2],u)); }
+  const u=(t-0.5)*2; return rgb(lerp(W[0],G[0],u), lerp(W[1],G[1],u), lerp(W[2],G[2],u));
+}
+
+// Slider
+const sliderMin = Number(rangeMin.min), sliderMax = Number(rangeMax.max);
+function syncSlider(which){
+  let a = Number(rangeMin.value), b = Number(rangeMax.value);
+  if (which==='min' && a > b) { rangeMax.value = a; b = a; }
+  if (which==='max' && b < a) { rangeMin.value = b; a = b; }
+  const left  = ((a - sliderMin) / (sliderMax - sliderMin)) * 100;
+  const right = 100 - ((b - sliderMin) / (sliderMax - sliderMin)) * 100;
+  sliderTrack.style.left  = left + '%';
+  sliderTrack.style.right = right + '%';
+  rangeLabel.textContent = `${a}% → ${b}%`;
+  tickMin.textContent = `${a}%`; tickZero.textContent = `0%`; tickMax.textContent = `${b}%`;
+}
+rangeMin.addEventListener('input',()=>{ syncSlider('min'); render(); styleGeo(); updateNatBadge(); });
+rangeMax.addEventListener('input',()=>{ syncSlider('max'); render(); styleGeo(); updateNatBadge(); });
+
+function enrichRows(targetKey){
+  const out=[];
+  for(const r of rawRows){
+    const name=getName(r); if(!name) continue;
+    const val=Number(r[targetKey]); if(!Number.isFinite(val)) continue;
+    out.push({NAME:name, CBSAFP:getCbsa(r), base:null, target:null, pct:val, isUS:(r.RegionType==='country'||name.toLowerCase()==='united states')});
+  }
+  return out;
+}
+
+function getTbody(){ return document.querySelector('#tbl tbody'); }
+function render(){
+  const lo = Number(rangeMin.value), hi = Number(rangeMax.value);
+  const q  = norm(searchBox.value).toLowerCase();
+  let usRow=null, data=[];
+  for(const r of rowsEnriched){ if(r.pct<lo||r.pct>hi) continue; if(q && !r.NAME.toLowerCase().includes(q)) continue; if(r.isUS) usRow=r; else data.push(r); }
+  data.sort((a,b)=>{const A=a[sortKey],B=b[sortKey]; if(A<B) return -1*sortDir; if(A>B) return 1*sortDir; return 0;});
+  const makeTr=r=>`<tr class="${r.pct<0?'negative':'positive'} ${r.isUS?'usRow':''}"><td>${r.NAME}</td><td>${r.CBSAFP||''}</td><td></td><td></td><td><span class="pill ${r.pct<0?'neg':'pos'}">${r.pct.toFixed(1)}%</span></td></tr>`;
+  let html=''; if(usRow) html+=makeTr(usRow); html+=data.map(makeTr).join('');
+  const tbd=getTbody(); if(tbd){ tbd.innerHTML=html || `<tr><td colspan="5" class="muted">No rows match your filters.</td></tr>`; }
+  const total=rowsEnriched.filter(r=>r.pct>=lo&&r.pct<=hi&&(!q||r.NAME.toLowerCase().includes(q))).length;
+  statusEl.textContent=`Showing ${total.toLocaleString()} of ${rowsEnriched.length.toLocaleString()} metros — target: ${currentDateKey}`;
+}
+
+function attachSort(){
+  document.querySelectorAll('th').forEach(th=>{
+    th.style.cursor='pointer';
+    th.addEventListener('click', ()=>{ const key=th.dataset.key; if(sortKey===key) sortDir*=-1; else { sortKey=key; sortDir=(key==='NAME'||key==='CBSAFP')?1:-1; } render(); });
+  });
+}
+
+function setPreset(which){
+  if(which==='pos'){ rangeMin.value = 0; rangeMax.value = 30; }
+  else if(which==='neg'){ rangeMin.value = -30; rangeMax.value = -0.1; }
+  else { rangeMin.value = -30; rangeMax.value = 30; }
+  syncSlider(); render(); styleGeo(); updateNatBadge();
+}
+
+async function ingestCsvText(csvText){
+  const parsed=Papa.parse(csvText,{header:true,dynamicTyping:true,skipEmptyLines:true});
+  rawRows=parsed.data; headers=parsed.meta.fields||Object.keys(rawRows[0]||{});
+  if(!rawRows.length){statusEl.textContent='CSV parsed but contains 0 rows.';return;}
+  dateCols=detectDateColumns(headers); if(!dateCols.length){statusEl.textContent='No date columns found.';return;}
+  const wasOneYear=chipOneYear.classList.contains('active');
+  oneYearKey=computeOneYearKey(rawRows); currentDateKey= wasOneYear && oneYearKey ? oneYearKey : dateCols.at(-1);
+  dateSelect.innerHTML=dateCols.map(c=>`<option value="${c}">${c}</option>`).join('');
+  dateSelect.value=currentDateKey; chipLatest.classList.toggle('active', !wasOneYear); chipOneYear.classList.toggle('active', wasOneYear);
+  rowsEnriched=enrichRows(currentDateKey); attachSort(); syncSlider(); render(); styleGeo(); updateNatBadge();
+}
+
+async function loadFromManifest(){
+  statusEl.textContent='Loading manifest…'; const man=await fetch(MANIFEST_URL,{cache:'no-store'}).then(r=>r.json());
+  const csvUrl=DATA_BASE+encodeURIComponent(man.current); statusEl.textContent='Fetching CSV…';
+  const csvText=await fetch(csvUrl,{cache:'no-store'}).then(r=>r.text()); await ingestCsvText(csvText);
+}
+
+// Map & GeoJSON
+function styleForFeature(feature){
+  const name = feature.properties.NAME || feature.properties.Metro || '';
+  const row  = rowsEnriched.find(r => r.NAME === name);
+  const val  = row ? row.pct : NaN;
+  const lo = Number(rangeMin.value), hi = Number(rangeMax.value);
+  const inRange = Number.isFinite(val) && val >= lo && val <= hi;
+  return { color:'#333', weight:0.3, fillOpacity: inRange ? 0.75 : 0.12, fillColor: colorScale(val, lo, hi) };
+}
+function styleGeo(){ if (!geoLayer) return; geoLayer.setStyle(styleForFeature); }
+function updateNatBadge(){
+  const us = rowsEnriched.find(r => r.isUS);
+  const lo = Number(rangeMin.value), hi = Number(rangeMax.value);
+  if (!us){ natVal.textContent='—'; natDot.style.background='#bbb'; natVal.className='pill'; return; }
+  const v = us.pct;
+  natVal.textContent = `${v.toFixed(1)}%`;
+  const c = colorScale(v, lo, hi);
+  natDot.style.background = c;
+  natVal.style.background = c;
+  natVal.className = 'pill';
+}
+function addLegend(){
+  tickMin.textContent = `${rangeMin.value}%`;
+  tickZero.textContent = `0%`;
+  tickMax.textContent = `${rangeMax.value}%`;
+}
+function initMap(){
+  if (map) return;
+  map=L.map('map').setView([37.8,-96],4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:10, attribution:'&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'}).addTo(map);
+  fetch(GEOJSON_URL,{cache:'no-store'}).then(r=>r.json()).then(geo=>{
+    geoLayer=L.geoJSON(geo,{
+      style: styleForFeature,
+      onEachFeature:(feature,layer)=>{
+        const name = feature.properties.NAME || feature.properties.Metro || '';
+        const row  = rowsEnriched.find(r => r.NAME === name);
+        if (row) layer.bindTooltip(`${name}: ${row.pct.toFixed(1)}%`, {sticky:true});
+      }
+    }).addTo(map);
+    addLegend();
+    setTimeout(()=>map.invalidateSize(), 250);
+  }).catch(e=>console.warn('GeoJSON load failed', e));
+}
+
+// Tabs
+const tabMap=document.getElementById('tabMap'), tabTable=document.getElementById('tabTable');
+function showMap(){ tabMap.classList.add('active'); tabTable.classList.remove('active'); mapView.style.display='block'; tableView.style.display='none'; initMap(); setTimeout(()=>map.invalidateSize(),250); }
+function showTable(){ tabTable.classList.add('active'); tabMap.classList.remove('active'); tableView.style.display='block'; mapView.style.display='none'; }
+tabMap.addEventListener('click', showMap);
+tabTable.addEventListener('click', showTable);
+
+// UI wiring
+document.querySelectorAll('.chip[data-preset]').forEach(el=>el.addEventListener('click',()=>setPreset(el.dataset.preset)));
+chipOneYear.addEventListener('click',()=>{chipOneYear.classList.add('active');chipLatest.classList.remove('active'); if(oneYearKey){currentDateKey=oneYearKey;dateSelect.value=currentDateKey;rowsEnriched=enrichRows(currentDateKey);render();styleGeo();updateNatBadge();}});
+chipLatest.addEventListener('click',()=>{chipLatest.classList.add('active');chipOneYear.classList.remove('active'); currentDateKey=dateCols.at(-1);dateSelect.value=currentDateKey;rowsEnriched=enrichRows(currentDateKey);render();styleGeo();updateNatBadge();});
+searchBox.addEventListener('input',()=>{render();styleGeo();});
+dateSelect.addEventListener('change',()=>{chipOneYear.classList.remove('active');chipLatest.classList.remove('active'); currentDateKey=dateSelect.value; rowsEnriched=enrichRows(currentDateKey); render(); styleGeo(); updateNatBadge();});
+resetBtn.addEventListener('click',()=>{
+  searchBox.value=''; rangeMin.value=-30; rangeMax.value=30;
+  currentDateKey=dateCols.at(-1); dateSelect.value=currentDateKey; rowsEnriched=enrichRows(currentDateKey);
+  syncSlider(); render(); styleGeo(); updateNatBadge(); addLegend();
+});
+downloadBtn.addEventListener('click',()=>{
+  const lo=+rangeMin.value, hi=+rangeMax.value, q=searchBox.value.trim().toLowerCase();
+  const filtered=rowsEnriched.filter(r=>r.pct>=lo&&r.pct<=hi&&(!q||r.NAME.toLowerCase().includes(q)));
+  const csv=[['Metro','CBSA',`Pct_${currentDateKey}`].join(','),
+    ...filtered.map(r=>[`"${r.NAME.replace(/"/g,'""')}"`,`"${(r.CBSAFP||'').toString().replace(/"/g,'""')}"`,r.pct.toFixed(2)].join(','))
+  ].join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`metros_filtered_${currentDateKey}.csv`; a.click(); URL.revokeObjectURL(url);
+});
+localCsv.addEventListener('change', async (e)=>{
+  const file = e.target.files?.[0]; if(!file) return;
+  const text = await file.text();
+  await ingestCsvText(text);
+});
+
+// Start
+showMap();
+syncSlider();
+loadFromManifest();
+</script>
+</body>
+</html>
