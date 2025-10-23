@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>US Metro Outlook — 1‑Year % Change</title>
+
+<link rel="preconnect" href="https://unpkg.com">
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root { --ok:#106b21; --bad:#a2121c; --muted:#6b7280; }
+body { margin:0; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#111827; }
+header { padding:14px 16px; border-bottom:1px solid #e5e7eb; background:#fafafa; display:grid; gap:6px; }
+h1 { margin:0; font-size:18px; }
+.muted { color:var(--muted); }
+
+/* Tabs */
+.tabs { display:flex; gap:8px; align-items:center; padding:10px 16px; border-bottom:1px solid #e5e7eb; }
+.tabbtn { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-radius:8px; cursor:pointer; }
+.tabbtn.active { background:#111827; color:#fff; border-color:#111827; }
+
+/* Map view */
+#mapView { display:none; height:75vh; }
+#map { height:100%; width:100%; border-top:1px solid #e5e7eb; }
+
+.controls { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:10px; padding:10px 16px; border-bottom:1px solid #e5e7eb; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
+label { display:block; font-size:12px; color:#374151; margin-bottom:4px; }
+select, input[type=range], input[type=text], button { width:100%; box-sizing:border-box; font:14px/1.4 inherit; }
+.row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.btn { padding:8px 10px; border:1px solid #d1d5db; background:#fff; border-radius:8px; cursor:pointer; }
+.btn:hover { background:#f3f4f6; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chip { font-size:12px; padding:4px 8px; border:1px solid #d1d5db; border-radius:999px; cursor:pointer; user-select:none; }
+.chip.active { background:#111827; color:#fff; border-color:#111827; }
+
+.wrap { overflow:auto; max-width:100vw; }
+table { width:100%; border-collapse:collapse; }
+th,td { padding:8px 10px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+th { background:#fafafa; font-weight:600; text-align:left; position:sticky; top:0; }
+tbody tr.negative { background:#fff7f7; }
+tbody tr.positive { background:#f5fff6; }
+.pill { display:inline-block; padding:2px 6px; border-radius:999px; font-size:12px; color:#fff; }
+.pill.pos { background:var(--ok); } .pill.neg { background:var(--bad); }
+tbody tr.usRow { border-top:2px solid #111827; border-bottom:2px solid #111827; background:#fffef2; }
+
+footer { padding:10px 16px; border-top:1px solid #e5e7eb; background:#fafafa; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>US Metro Outlook — 1‑Year % Change</h1>
+  <div class="muted">Data © Zillow® — <a href="https://www.zillow.com/research/data/" target="_blank" rel="noopener">Home Values Forecasts → Metro &amp; US</a>. Uses your latest CSV via <code>data/manifest.json</code>.</div>
+  <div id="status" class="muted">Loading…</div>
+</header>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button id="tabTable" class="tabbtn active" type="button">Table</button>
+  <button id="tabMap" class="tabbtn" type="button">Map</button>
+</div>
+
+<!-- Map view -->
+<div id="mapView"><div id="map"></div></div>
+
+<!-- Table view -->
+<div id="tableView">
+  <section class="controls">
+    <div class="card">
+      <label for="dateSelect">Target date column</label>
+      <select id="dateSelect"></select>
+      <div class="chips" style="margin-top:6px">
+        <span id="chipOneYear" class="chip">1‑year (auto)</span>
+        <span id="chipLatest" class="chip">Latest date</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>Filter by 1‑yr % range</label>
+      <div class="row">
+        <div>
+          <input type="range" id="minRange" min="-30" max="30" step="0.5" value="-30">
+          <div class="muted">Min: <span id="minVal">-30%</span></div>
+        </div>
+        <div>
+          <input type="range" id="maxRange" min="-30" max="30" step="0.5" value="30">
+          <div class="muted">Max: <span id="maxVal">30%</span></div>
+        </div>
+      </div>
+      <div class="chips" style="margin-top:6px">
+        <span class="chip" data-preset="pos">Only positive</span>
+        <span class="chip" data-preset="neg">Only negative</span>
+        <span class="chip" data-preset="all">Reset range</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="searchBox">Search metros</label>
+      <input id="searchBox" type="text" placeholder="Type metro name…">
+      <div style="margin-top:8px; display:flex; gap:8px;">
+        <button id="downloadCsv" class="btn">Download filtered CSV</button>
+        <button id="reset" class="btn">Reset</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th data-key="NAME">Metro</th>
+          <th data-key="CBSAFP">CBSA</th>
+          <th data-key="base">Base value</th>
+          <th data-key="target">Target value</th>
+          <th data-key="pct">1‑yr %</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</div>
+
+<footer>Prepared by ABG. Green = growth (≥ 0%), Red = decline (&lt; 0%). Table is sortable — click a header.</footer>
+
+<script>
+// Config
+const MANIFEST_URL = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/manifest.json";
+const DATA_BASE     = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/";
+
+// DOM
+const statusEl=document.getElementById('status'), dateSelect=document.getElementById('dateSelect');
+const chipOneYear=document.getElementById('chipOneYear'), chipLatest=document.getElementById('chipLatest');
+const minRange=document.getElementById('minRange'), maxRange=document.getElementById('maxRange');
+const minVal=document.getElementById('minVal'), maxVal=document.getElementById('maxVal');
+const searchBox=document.getElementById('searchBox'), resetBtn=document.getElementById('reset');
+const downloadBtn=document.getElementById('downloadCsv'); const tableView=document.getElementById('tableView'); const mapView=document.getElementById('mapView');
+
+let rawRows=[], headers=[], dateCols=[], currentDateKey=null, oneYearKey=null, rowsEnriched=[], sortKey='pct', sortDir=-1;
+
+// helpers
+const norm=s=>String(s??'').trim();
+const toDate=s=>{const m=String(s||'').match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/); if(!m)return NaN; const [_,Y,M='01',D='01']=m; return new Date(+Y,+M-1,+D);};
+const detectDateColumns=cols=>cols.filter(h=>/^\d{4}(?:-\d{2})?(?:-\d{2})?$/.test(h)).sort((a,b)=>toDate(a)-toDate(b));
+function findNearest(dates,target){let best=null,d=1e18;for(const k of dates){const td=toDate(k);if(isNaN(+td))continue;const diff=Math.abs(td-target);if(diff<d){d=diff;best=k;}}return best;}
+function computeOneYearKey(rows){if(!rows.length)return null;const hasBase=headers.includes('BaseDate'); if(!hasBase) return dateCols.at(-1); const counts=new Map(); for(const r of rows){const bd=new Date(r.BaseDate); if(isNaN(+bd))continue; const t=new Date(bd); t.setFullYear(bd.getFullYear()+1); const near=findNearest(dateCols,t); if(near) counts.set(near,(counts.get(near)||0)+1);} let pick=null,max=0; for(const [k,v] of counts) if(v>max){max=v;pick=k;} return pick||dateCols.at(-1);}
+const getName=r=>norm(r.RegionName??r.Name??r.Metro??r.MSA??r['Region Name']??'');
+const getCbsa=r=>norm(r.CBSA??r.CBSAFP??r.cbsa??'');
+const getTbody=()=>document.querySelector('#tbl tbody');
+
+function enrichRows(targetKey){
+  const out=[];
+  for(const r of rawRows){
+    const name=getName(r); if(!name) continue;
+    const val=Number(r[targetKey]); if(!Number.isFinite(val)) continue;
+    out.push({NAME:name, CBSAFP:getCbsa(r), base:null, target:null, pct:val, isUS:(r.RegionType==='country'||name.toLowerCase()==='united states')});
+  }
+  return out;
+}
+
+function render(){
+  const lo=Number(minRange.value), hi=Number(maxRange.value), q=norm(searchBox.value).toLowerCase();
+  minVal.textContent=`${lo}%`; maxVal.textContent=`${hi}%`;
+  let usRow=null, data=[];
+  for(const r of rowsEnriched){ if(r.pct<lo||r.pct>hi) continue; if(q && !r.NAME.toLowerCase().includes(q)) continue; if(r.isUS) usRow=r; else data.push(r); }
+  data.sort((a,b)=>{const A=a[sortKey],B=b[sortKey]; if(A<B) return -1*sortDir; if(A>B) return 1*sortDir; return 0;});
+  const makeTr=r=>`<tr class="${r.pct<0?'negative':'positive'} ${r.isUS?'usRow':''}"><td>${r.NAME}</td><td>${r.CBSAFP||''}</td><td></td><td></td><td><span class="pill ${r.pct<0?'neg':'pos'}">${r.pct.toFixed(1)}%</span></td></tr>`;
+  let html=''; if(usRow) html+=makeTr(usRow); html+=data.map(makeTr).join('');
+  const tbd=getTbody(); if(tbd){ tbd.innerHTML=html || `<tr><td colspan="5" class="muted">No rows match your filters.</td></tr>`; }
+  const total=rowsEnriched.filter(r=>r.pct>=lo&&r.pct<=hi&&(!q||r.NAME.toLowerCase().includes(q))).length;
+  statusEl.textContent=`Showing ${total.toLocaleString()} of ${rowsEnriched.length.toLocaleString()} metros — target: ${currentDateKey}`;
+}
+
+function attachSort(){
+  document.querySelectorAll('th').forEach(th=>{
+    th.style.cursor='pointer';
+    th.addEventListener('click', ()=>{ const key=th.dataset.key; if(sortKey===key) sortDir*=-1; else { sortKey=key; sortDir=(key==='NAME'||key==='CBSAFP')?1:-1; } render(); });
+  });
+}
+
+function setPreset(which){ if(which==='pos'){minRange.value=0;maxRange.value=30;} else if(which==='neg'){minRange.value=-30;maxRange.value=-0.1;} else {minRange.value=-30;maxRange.value=30;} render(); }
+
+async function ingestCsvText(csvText){
+  const parsed=Papa.parse(csvText,{header:true,dynamicTyping:true,skipEmptyLines:true});
+  rawRows=parsed.data; headers=parsed.meta.fields||Object.keys(rawRows[0]||{});
+  if(!rawRows.length){statusEl.textContent='CSV parsed but contains 0 rows.';return;}
+  dateCols=detectDateColumns(headers); if(!dateCols.length){statusEl.textContent='No date columns found.';return;}
+  oneYearKey=computeOneYearKey(rawRows); currentDateKey=dateCols.at(-1);
+  dateSelect.innerHTML=dateCols.map(c=>`<option value="${c}">${c}</option>`).join(''); dateSelect.value=currentDateKey; chipLatest.classList.add('active'); chipOneYear.classList.remove('active');
+  rowsEnriched=enrichRows(currentDateKey); attachSort(); render();
+}
+
+async function loadFromManifest(){
+  statusEl.textContent='Loading manifest…'; const man=await fetch(MANIFEST_URL,{cache:'no-store'}).then(r=>r.json());
+  const csvUrl=DATA_BASE+encodeURIComponent(man.current); statusEl.textContent='Fetching CSV…';
+  const csvText=await fetch(csvUrl,{cache:'no-store'}).then(r=>r.text()); await ingestCsvText(csvText);
+}
+
+// UI wiring
+document.querySelectorAll('.chip[data-preset]').forEach(el=>el.addEventListener('click',()=>setPreset(el.dataset.preset)));
+chipOneYear.addEventListener('click',()=>{chipOneYear.classList.add('active');chipLatest.classList.remove('active'); if(oneYearKey){currentDateKey=oneYearKey;dateSelect.value=currentDateKey;rowsEnriched=enrichRows(currentDateKey);render();}});
+chipLatest.addEventListener('click',()=>{chipLatest.classList.add('active');chipOneYear.classList.remove('active'); currentDateKey=dateCols.at(-1);dateSelect.value=currentDateKey;rowsEnriched=enrichRows(currentDateKey);render();});
+[minRange,maxRange,searchBox].forEach(el=>el.addEventListener('input',render));
+dateSelect.addEventListener('change',()=>{chipOneYear.classList.remove('active');chipLatest.classList.remove('active'); currentDateKey=dateSelect.value; rowsEnriched=enrichRows(currentDateKey); render();});
+resetBtn.addEventListener('click',()=>{searchBox.value='';minRange.value=-30;maxRange.value=30; currentDateKey=dateCols.at(-1);dateSelect.value=currentDateKey;rowsEnriched=enrichRows(currentDateKey);render();});
+downloadBtn.addEventListener('click',()=>{const lo=+minRange.value,hi=+maxRange.value,q=searchBox.value.trim().toLowerCase(); const filtered=rowsEnriched.filter(r=>r.pct>=lo&&r.pct<=hi&&(!q||r.NAME.toLowerCase().includes(q))); const csv=[['Metro','CBSA',`Pct_${currentDateKey}`].join(','),...filtered.map(r=>[`"${r.NAME.replace(/"/g,'""')}"` , `"${(r.CBSAFP||'').toString().replace(/"/g,'""')}"`, r.pct.toFixed(2)].join(','))].join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`metros_filtered_${currentDateKey}.csv`; a.click(); URL.revokeObjectURL(url);});
+
+// Tabs & map
+let map; const tabTable=document.getElementById('tabTable'), tabMap=document.getElementById('tabMap');
+tabTable.addEventListener('click',()=>{tabTable.classList.add('active');tabMap.classList.remove('active'); tableView.style.display='block'; mapView.style.display='none';});
+tabMap.addEventListener('click',()=>{tabMap.classList.add('active');tabTable.classList.remove('active'); tableView.style.display='none'; mapView.style.display='block'; if(!map){ map=L.map('map').setView([37.8,-96],4); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:10, attribution:'&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'}).addTo(map);} setTimeout(()=>map.invalidateSize(),200);});
+
+// Start
+loadFromManifest();
+</script>
+</body>
+</html>
