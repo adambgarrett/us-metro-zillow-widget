@@ -1,39 +1,301 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zillow Metro Data Viewer</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zillow Metro Outlook – Filterable Table</title>
+<link rel="preconnect" href="https://unpkg.com">
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root { --ok:#106b21; --bad:#a2121c; --muted:#6b7280; }
+  body { margin:0; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:#111827; }
+  header { padding:14px 16px; border-bottom:1px solid #e5e7eb; background:#fafafa; display:grid; gap:6px; }
+  h1 { margin:0; font-size:18px; }
+  .muted { color:var(--muted); }
+  .controls { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:10px; padding:10px 16px; border-bottom:1px solid #e5e7eb; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
+  label { display:block; font-size:12px; color:#374151; margin-bottom:4px; }
+  select, input[type="range"], input[type="text"], button { width:100%; box-sizing:border-box; font:14px/1.4 inherit; }
+  .row { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+  .btn { padding:8px 10px; border:1px solid #d1d5db; background:#fff; border-radius:8px; cursor:pointer; }
+  .btn:hover { background:#f3f4f6; }
+  .btn.primary { background:#111827; color:#fff; border-color:#111827; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:12px; padding:4px 8px; border:1px solid #d1d5db; border-radius:999px; cursor:pointer; user-select:none; }
+  .chip.active { background:#111827; color:#fff; border-color:#111827; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:8px 10px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+  th { background:#fafafa; font-weight:600; text-align:left; position:sticky; top:0; }
+  tbody tr.negative { background: #fff7f7; }
+  tbody tr.positive { background: #f5fff6; }
+  .pill { display:inline-block; padding:2px 6px; border-radius:999px; font-size:12px; color:#fff; }
+  .pill.pos { background:var(--ok); }
+  .pill.neg { background:var(--bad); }
+  .wrap { overflow:auto; max-width:100vw; }
+  footer { padding:10px 16px; border-top:1px solid #e5e7eb; background:#fafafa; font-size:12px; }
+</style>
 </head>
 <body>
-  <h1>🏙️ Zillow Metro Data Viewer</h1>
-  <p>This widget automatically loads the latest Zillow metro CSV from GitHub.</p>
 
-  <pre id="preview" style="background:#f8f9fa;padding:10px;border-radius:8px;max-height:300px;overflow:auto;"></pre>
+<header>
+  <h1>US Metro Outlook — 1-Year % Change</h1>
+  <div class="muted">Data © Zillow® — <a href="https://www.zillow.com/research/data/" target="_blank" rel="noopener">Home Values Forecasts → Metro &amp; US</a>. Uses your latest CSV via <code>data/manifest.json</code>.</div>
+  <div id="status" class="muted">Loading…</div>
+</header>
 
-  <script>
-  async function loadZillowData() {
-    try {
-      const manifestUrl = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/manifest.json";
-      const manifestResponse = await fetch(manifestUrl);
-      const manifest = await manifestResponse.json();
+<section class="controls">
+  <div class="card">
+    <label for="dateSelect">Target date column</label>
+    <select id="dateSelect"></select>
+    <div class="chips" style="margin-top:6px">
+      <span id="chipOneYear" class="chip">1-year (auto)</span>
+      <span id="chipLatest" class="chip">Latest date</span>
+    </div>
+  </div>
 
-      const csvFile = manifest.current;
-      const csvUrl = `https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/${encodeURIComponent(csvFile)}`;
+  <div class="card">
+    <label>Filter by 1-yr % range</label>
+    <div class="row">
+      <div>
+        <input type="range" id="minRange" min="-30" max="30" step="0.5" value="-30">
+        <div class="muted">Min: <span id="minVal">-30%</span></div>
+      </div>
+      <div>
+        <input type="range" id="maxRange" min="-30" max="30" step="0.5" value="30">
+        <div class="muted">Max: <span id="maxVal">30%</span></div>
+      </div>
+    </div>
+    <div class="chips" style="margin-top:6px">
+      <span class="chip" data-preset="pos">Only positive</span>
+      <span class="chip" data-preset="neg">Only negative</span>
+      <span class="chip" data-preset="all">Reset range</span>
+    </div>
+  </div>
 
-      console.log("🔄 Latest Zillow data file:", csvUrl);
+  <div class="card">
+    <label for="searchBox">Search metros</label>
+    <input id="searchBox" type="text" placeholder="Type metro name…">
+    <div style="margin-top:8px; display:flex; gap:8px;">
+      <button id="downloadCsv" class="btn">Download filtered CSV</button>
+      <button id="reset" class="btn">Reset</button>
+    </div>
+  </div>
+</section>
 
-      const csvResponse = await fetch(csvUrl);
-      const csvText = await csvResponse.text();
+<section class="wrap">
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th data-key="NAME">Metro</th>
+        <th data-key="CBSAFP">CBSA</th>
+        <th data-key="base">Base value</th>
+        <th data-key="target">Target value</th>
+        <th data-key="pct">1-yr %</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
 
-      const preview = csvText.split("\n").slice(0, 10).join("\n");
-      document.getElementById("preview").textContent = preview;
-    } catch (err) {
-      console.error("❌ Failed to load Zillow data:", err);
-      document.getElementById("preview").textContent = "Error loading data.";
+<footer>
+  Prepared by ABG. Green = growth (≥ 0%), Red = decline (&lt; 0%). Table is sortable — click a header.
+</footer>
+
+<script>
+const MANIFEST_URL = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/manifest.json";
+const DATA_BASE = "https://raw.githubusercontent.com/adambgarrett/us-metro-zillow-widget/main/data/";
+
+const statusEl = document.getElementById('status');
+const dateSelect = document.getElementById('dateSelect');
+const chipOneYear = document.getElementById('chipOneYear');
+const chipLatest  = document.getElementById('chipLatest');
+const minRange = document.getElementById('minRange');
+const maxRange = document.getElementById('maxRange');
+const minVal   = document.getElementById('minVal');
+const maxVal   = document.getElementById('maxVal');
+const searchBox = document.getElementById('searchBox');
+const resetBtn = document.getElementById('reset');
+const downloadBtn = document.getElementById('downloadCsv');
+const tbody = document.querySelector('#tbl tbody');
+
+let rawRows = [];       // parsed CSV rows (objects)
+let headers = [];       // header names
+let dateCols = [];      // detected date columns
+let baseKey = 'BaseDate'; // Zillow column name for base values
+let currentDateKey = null; // active target date column
+let oneYearKey = null;  // best-fit 1-year date
+let rowsEnriched = [];  // derived values for table
+let sortKey = 'pct', sortDir = -1; // default sort by percent desc
+
+function normalizeName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+
+function detectDateColumns(cols){
+  return cols.filter(h => /^\d{4}(-\d{2}){0,2}$/.test(h));
+}
+
+function pickOneYearKey(rows, dcols){
+  // Based on BaseDate + ~12 months
+  const count = new Map();
+  for (const r of rows){
+    const base = new Date(r[baseKey]);
+    if (isNaN(+base)) continue;
+    const target = new Date(base); target.setFullYear(base.getFullYear()+1);
+    let best=null, bestDiff=Infinity;
+    for (const c of dcols){
+      const d = new Date(c);
+      if (isNaN(+d)) continue;
+      const diff = Math.abs(d - target);
+      if (diff < bestDiff){ bestDiff=diff; best=c; }
     }
+    if (best) count.set(best, (count.get(best)||0)+1);
   }
-  loadZillowData();
-  </script>
+  let pick=null, max=0;
+  for (const [k,v] of count.entries()){ if (v>max){ max=v; pick=k; } }
+  return pick || (dcols.at(-1) || null);
+}
+
+function enrich(rows, targetCol){
+  const out = [];
+  for (const r of rows){
+    const name = r.RegionName || r.Name || r.Metro || r.MSA || r['Region Name'] || '';
+    const base = Number(r[baseKey]);
+    const target = Number(r[targetCol]);
+    if (!name || !Number.isFinite(base) || !Number.isFinite(target)) continue;
+    const pct = ((target - base) / base) * 100;
+    const cbsa = r.CBSA || r.CBSAFP || r.cbsa || '';
+    out.push({ NAME: name, CBSAFP: cbsa, base, target, pct });
+  }
+  return out;
+}
+
+function render(){
+  const q = normalizeName(searchBox.value);
+  const lo = Number(minRange.value), hi = Number(maxRange.value);
+  minVal.textContent = `${lo}%`; maxVal.textContent = `${hi}%`;
+
+  let data = rowsEnriched.filter(r =>
+    r.pct >= lo && r.pct <= hi && (!q || normalizeName(r.NAME).includes(q))
+  );
+
+  data.sort((a,b)=>{
+    const vA = a[sortKey], vB = b[sortKey];
+    if (vA < vB) return -1*sortDir;
+    if (vA > vB) return  1*sortDir;
+    return 0;
+  });
+
+  const rows = data.map(r=>{
+    const cls = (r.pct < 0) ? 'negative' : 'positive';
+    const pill = r.pct < 0 ? `<span class="pill neg">${r.pct.toFixed(1)}%</span>`
+                           : `<span class="pill pos">${r.pct.toFixed(1)}%</span>`;
+    return `<tr class="${cls}">
+      <td>${r.NAME}</td>
+      <td>${r.CBSAFP||''}</td>
+      <td>${Number.isFinite(r.base)?r.base.toLocaleString():''}</td>
+      <td>${Number.isFinite(r.target)?r.target.toLocaleString():''}</td>
+      <td>${pill}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.innerHTML = rows || `<tr><td colspan="5" class="muted">No rows match your filters.</td></tr>`;
+  statusEl.textContent = `Showing ${data.length.toLocaleString()} of ${rowsEnriched.length.toLocaleString()} metros — target: ${currentDateKey}`;
+}
+
+function attachSort(){
+  document.querySelectorAll('th').forEach(th=>{
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', ()=>{
+      const key = th.dataset.key;
+      if (sortKey === key){ sortDir *= -1; } else { sortKey = key; sortDir = (key==='NAME'||key==='CBSAFP') ? 1 : -1; }
+      render();
+    });
+  });
+}
+
+function setPreset(type){
+  if (type==='pos'){ minRange.value = 0; maxRange.value = 30; }
+  else if (type==='neg'){ minRange.value = -30; maxRange.value = -0.1; }
+  else { minRange.value = -30; maxRange.value = 30; }
+  render();
+}
+
+async function load(){
+  statusEl.textContent = 'Loading manifest…';
+  const man = await fetch(MANIFEST_URL, {cache:'no-store'}).then(r=>r.json());
+  const csvUrl = DATA_BASE + encodeURIComponent(man.current);
+  statusEl.textContent = 'Fetching CSV…';
+  const csvText = await fetch(csvUrl).then(r=>r.text());
+  const parsed = Papa.parse(csvText, {header:true, dynamicTyping:true, skipEmptyLines:true});
+  rawRows = parsed.data;
+  headers = parsed.meta.fields || Object.keys(rawRows[0]||{});
+  dateCols = detectDateColumns(headers);
+  oneYearKey = pickOneYearKey(rawRows, dateCols);
+  currentDateKey = oneYearKey || dateCols.at(-1);
+  // populate date dropdown
+  dateSelect.innerHTML = dateCols.map(c=>`<option value="${c}">${c}</option>`).join('');
+  if (currentDateKey){ dateSelect.value = currentDateKey; }
+  rowsEnriched = enrich(rawRows, currentDateKey);
+  attachSort();
+  render();
+  // chip states
+  chipOneYear.classList.add('active');
+}
+
+document.querySelectorAll('.chip[data-preset]').forEach(el=>{
+  el.addEventListener('click', ()=> setPreset(el.dataset.preset));
+});
+chipOneYear.addEventListener('click', ()=>{
+  chipOneYear.classList.add('active'); chipLatest.classList.remove('active');
+  currentDateKey = oneYearKey || currentDateKey;
+  if (currentDateKey){ dateSelect.value = currentDateKey; rowsEnriched = enrich(rawRows, currentDateKey); render(); }
+});
+chipLatest.addEventListener('click', ()=>{
+  chipLatest.classList.add('active'); chipOneYear.classList.remove('active');
+  currentDateKey = dateCols.at(-1);
+  if (currentDateKey){ dateSelect.value = currentDateKey; rowsEnriched = enrich(rawRows, currentDateKey); render(); }
+});
+
+[minRange, maxRange, searchBox].forEach(el => el.addEventListener('input', render));
+dateSelect.addEventListener('change', ()=>{
+  chipOneYear.classList.remove('active'); chipLatest.classList.remove('active');
+  currentDateKey = dateSelect.value;
+  rowsEnriched = enrich(rawRows, currentDateKey);
+  render();
+});
+resetBtn.addEventListener('click', ()=>{
+  searchBox.value = '';
+  minRange.value = -30; maxRange.value = 30;
+  if (oneYearKey){ dateSelect.value = oneYearKey; currentDateKey = oneYearKey; }
+  rowsEnriched = enrich(rawRows, currentDateKey);
+  render();
+});
+
+downloadBtn.addEventListener('click', ()=>{
+  // Export currently filtered rows to CSV
+  const lo = Number(minRange.value), hi = Number(maxRange.value);
+  const q = searchBox.value.trim().toLowerCase();
+  const filtered = rowsEnriched.filter(r =>
+    r.pct >= lo && r.pct <= hi && (!q || r.NAME.toLowerCase().includes(q))
+  );
+  const csv = [
+    ['Metro','CBSA','BaseValue','TargetValue',`Pct_${currentDateKey}`].join(','),
+    ...filtered.map(r => [
+      `"${r.NAME.replace(/"/g,'""')}"`,
+      `"${(r.CBSAFP||'').toString().replace(/"/g,'""')}"`,
+      r.base, r.target, r.pct.toFixed(2)
+    ].join(','))
+  ].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `metros_filtered_${currentDateKey}.csv`; a.click();
+  URL.revokeObjectURL(url);
+});
+
+load().catch(err=>{
+  console.error(err);
+  statusEl.textContent = 'Error loading data.';
+});
+</script>
+
 </body>
 </html>
