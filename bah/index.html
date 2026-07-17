@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Calculate 2026 Basic Allowance for Housing for military installations in Central and Eastern Virginia.">
+  <title>2026 Virginia BAH Calculator | ABGRE</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --navy-950: #071a2f;
+      --navy-900: #0b2748;
+      --navy-800: #12375f;
+      --navy-700: #194b7d;
+      --blue-100: #eaf3fb;
+      --blue-50: #f5f9fd;
+      --gold: #d9a82e;
+      --gold-dark: #966d0b;
+      --ink: #172235;
+      --muted: #5c6877;
+      --line: #d8e0e8;
+      --surface: #ffffff;
+      --success: #176b4a;
+      --shadow: 0 14px 38px rgba(7, 26, 47, 0.12);
+      --radius-lg: 22px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: linear-gradient(160deg, #eef5fb 0%, #ffffff 48%, #f8f4e9 100%);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    button, select, a { font: inherit; }
+
+    button, select { min-height: 46px; }
+
+    button:focus-visible,
+    select:focus-visible,
+    a:focus-visible {
+      outline: 3px solid rgba(217, 168, 46, 0.55);
+      outline-offset: 3px;
+    }
+
+    a { color: var(--navy-700); }
+
+    .widget {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: clamp(14px, 3vw, 30px);
+    }
+
+    .shell {
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(11, 39, 72, 0.12);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(24px, 5vw, 48px);
+      color: #fff;
+      background:
+        radial-gradient(circle at 88% 12%, rgba(217, 168, 46, 0.3), transparent 30%),
+        linear-gradient(132deg, var(--navy-950), var(--navy-700));
+    }
+
+    .hero::after {
+      position: absolute;
+      right: -40px;
+      bottom: -72px;
+      width: 280px;
+      height: 160px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      content: "";
+      transform: rotate(-15deg);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 0 4px rgba(217, 168, 46, 0.16);
+    }
+
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(1.9rem, 5vw, 3.25rem);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    .hero p {
+      max-width: 740px;
+      margin: 14px 0 0;
+      color: rgba(255, 255, 255, 0.84);
+      font-size: clamp(0.98rem, 2vw, 1.12rem);
+    }
+
+    .body { padding: clamp(18px, 4vw, 38px); }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      margin: 0 0 14px;
+      color: var(--navy-900);
+      font-size: clamp(1.1rem, 2.3vw, 1.35rem);
+      line-height: 1.25;
+    }
+
+    .step-number {
+      display: inline-grid;
+      flex: 0 0 30px;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--navy-800);
+      font-size: 0.9rem;
+    }
+
+    .region-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      max-width: 720px;
+      margin-bottom: 14px;
+      padding: 5px;
+      border-radius: 12px;
+      background: var(--blue-100);
+    }
+
+    .region-tab {
+      border: 0;
+      border-radius: 9px;
+      padding: 9px 12px;
+      color: var(--navy-800);
+      background: transparent;
+      cursor: pointer;
+      font-weight: 750;
+    }
+
+    .region-tab[aria-selected="true"] {
+      color: #fff;
+      background: var(--navy-800);
+      box-shadow: 0 5px 12px rgba(11, 39, 72, 0.18);
+    }
+
+    .installations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+
+    .installation {
+      position: relative;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px 12px 17px;
+      color: var(--navy-900);
+      background: var(--surface);
+      cursor: pointer;
+      text-align: left;
+      transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    .installation::before {
+      position: absolute;
+      top: 10px;
+      bottom: 10px;
+      left: 7px;
+      width: 3px;
+      border-radius: 999px;
+      background: var(--gold);
+      content: "";
+      opacity: 0.5;
+    }
+
+    .installation:hover {
+      z-index: 1;
+      border-color: #8ba7c2;
+      box-shadow: 0 7px 20px rgba(11, 39, 72, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .installation[aria-pressed="true"] {
+      border-color: var(--navy-700);
+      color: #fff;
+      background: var(--navy-800);
+      box-shadow: 0 8px 22px rgba(11, 39, 72, 0.18);
+    }
+
+    .installation[aria-pressed="true"]::before { background: var(--gold); opacity: 1; }
+
+    .installation-name {
+      display: block;
+      overflow-wrap: anywhere;
+      font-size: 0.91rem;
+      font-weight: 780;
+      line-height: 1.25;
+    }
+
+    .installation-meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.73rem;
+    }
+
+    .installation[aria-pressed="true"] .installation-meta { color: rgba(255, 255, 255, 0.72); }
+
+    .selection-area {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1.2fr);
+      gap: clamp(18px, 4vw, 34px);
+      align-items: stretch;
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: clamp(17px, 3vw, 24px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--blue-50);
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--navy-900);
+      font-size: 0.83rem;
+      font-weight: 800;
+    }
+
+    select {
+      width: 100%;
+      border: 1px solid #aab7c5;
+      border-radius: 9px;
+      padding: 10px 38px 10px 12px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .segment-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .segment {
+      display: flex;
+      min-height: 46px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #aab7c5;
+      border-radius: 9px;
+      padding: 8px 10px;
+      color: var(--navy-800);
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 750;
+    }
+
+    .segment-input:checked + .segment {
+      border-color: var(--navy-800);
+      color: #fff;
+      background: var(--navy-800);
+    }
+
+    .segment-input:focus-visible + .segment {
+      outline: 3px solid rgba(217, 168, 46, 0.55);
+      outline-offset: 3px;
+    }
+
+    .selected-station {
+      margin: auto 0 0;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .selected-station strong {
+      display: block;
+      margin-top: 3px;
+      color: var(--navy-900);
+      font-size: 0.94rem;
+    }
+
+    .result {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      border-radius: var(--radius-md);
+      color: #fff;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(217, 168, 46, 0.24), transparent 38%),
+        var(--navy-900);
+    }
+
+    .result-main { padding: clamp(22px, 5vw, 38px); }
+
+    .result-kicker {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .monthly-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .monthly {
+      overflow-wrap: anywhere;
+      font-size: clamp(2.7rem, 8vw, 4.7rem);
+      font-weight: 850;
+      line-height: 1;
+      letter-spacing: -0.055em;
+    }
+
+    .per-month { color: rgba(255, 255, 255, 0.72); font-weight: 700; }
+
+    .annual {
+      margin: 11px 0 0;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 1rem;
+    }
+
+    .result-details {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .result-detail { padding: 15px clamp(16px, 4vw, 26px); }
+    .result-detail + .result-detail { border-left: 1px solid rgba(255, 255, 255, 0.14); }
+
+    .detail-label {
+      display: block;
+      color: rgba(255, 255, 255, 0.62);
+      font-size: 0.72rem;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .detail-value {
+      display: block;
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+      font-size: 0.9rem;
+      font-weight: 750;
+    }
+
+    .difference {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 18px 0 0;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.84rem;
+    }
+
+    .difference-dot {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 8px;
+      border-radius: 50%;
+      background: var(--gold);
+    }
+
+    .notes {
+      margin-top: 26px;
+      padding: 18px clamp(17px, 3vw, 24px);
+      border-left: 4px solid var(--gold);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      color: #485567;
+      background: #fbf8ef;
+      font-size: 0.82rem;
+    }
+
+    .notes p { margin: 0; }
+    .notes p + p { margin-top: 8px; }
+    .notes strong { color: var(--ink); }
+
+    .cta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-top: 26px;
+      padding: clamp(19px, 4vw, 28px);
+      border-radius: var(--radius-md);
+      background: var(--blue-100);
+    }
+
+    .cta h2 {
+      margin: 0;
+      color: var(--navy-900);
+      font-size: clamp(1.05rem, 2.3vw, 1.35rem);
+    }
+
+    .cta p { margin: 5px 0 0; color: var(--muted); font-size: 0.88rem; }
+
+    .cta-links { display: flex; flex: 0 0 auto; gap: 8px; }
+
+    .cta-link {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--navy-800);
+      border-radius: 9px;
+      padding: 9px 13px;
+      color: var(--navy-800);
+      background: transparent;
+      font-size: 0.84rem;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .cta-link.primary { color: #fff; background: var(--navy-800); }
+
+    .footer {
+      padding: 14px clamp(18px, 4vw, 38px);
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      background: #fbfcfd;
+      font-size: 0.73rem;
+      text-align: center;
+    }
+
+    @media (max-width: 760px) {
+      .selection-area { grid-template-columns: 1fr; }
+      .cta { align-items: stretch; flex-direction: column; }
+      .cta-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 520px) {
+      .widget { padding: 8px; }
+      .shell { border-radius: 16px; }
+      .hero { padding: 23px 19px; }
+      .body { padding: 16px 13px 22px; }
+      .region-tabs { grid-template-columns: 1fr; }
+      .installations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+      .installation { min-height: 67px; padding: 10px 8px 10px 14px; }
+      .installation-name { font-size: 0.78rem; }
+      .installation-meta { font-size: 0.65rem; }
+      .segmented { grid-template-columns: 1fr; }
+      .result-details { grid-template-columns: 1fr; }
+      .result-detail + .result-detail { border-top: 1px solid rgba(255, 255, 255, 0.14); border-left: 0; }
+      .cta-links { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="widget">
+    <article class="shell" aria-labelledby="calculator-title">
+      <header class="hero">
+        <div class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Official 2026 DoD rate data</div>
+        <h1 id="calculator-title">Central &amp; Eastern Virginia BAH Calculator</h1>
+        <p>Choose a highlighted installation, then select your pay grade and dependency status. No duty-station ZIP lookup required.</p>
+      </header>
+
+      <div class="body">
+        <section aria-labelledby="installation-heading">
+          <h2 class="step" id="installation-heading"><span class="step-number">1</span> Choose your duty installation</h2>
+          <div class="region-tabs" role="tablist" aria-label="Virginia installation regions">
+            <button class="region-tab" type="button" role="tab" id="tab-hampton" aria-selected="true" aria-controls="installations" data-region="hampton">Hampton Roads</button>
+            <button class="region-tab" type="button" role="tab" id="tab-central" aria-selected="false" aria-controls="installations" data-region="central">Central VA + Northern Neck</button>
+          </div>
+          <div class="installations-grid" id="installations" role="tabpanel" aria-labelledby="tab-hampton"></div>
+        </section>
+
+        <section aria-labelledby="details-heading">
+          <h2 class="step" id="details-heading"><span class="step-number">2</span> Select your details</h2>
+          <div class="selection-area">
+            <div class="controls">
+              <div>
+                <label class="field-label" for="grade">Pay grade</label>
+                <select id="grade">
+                  <optgroup label="Enlisted">
+                    <option>E-1</option><option>E-2</option><option>E-3</option><option>E-4</option><option selected>E-5</option><option>E-6</option><option>E-7</option><option>E-8</option><option>E-9</option>
+                  </optgroup>
+                  <optgroup label="Warrant officer">
+                    <option>W-1</option><option>W-2</option><option>W-3</option><option>W-4</option><option>W-5</option>
+                  </optgroup>
+                  <optgroup label="Prior-enlisted officer">
+                    <option>O-1E</option><option>O-2E</option><option>O-3E</option>
+                  </optgroup>
+                  <optgroup label="Commissioned officer">
+                    <option>O-1</option><option>O-2</option><option>O-3</option><option>O-4</option><option>O-5</option><option>O-6</option><option>O-7+</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <span class="field-label" id="dependency-label">Dependency status</span>
+                <div class="segmented" role="radiogroup" aria-labelledby="dependency-label">
+                  <input class="segment-input" id="dependency-with" type="radio" name="dependency" value="with" checked>
+                  <label class="segment" for="dependency-with">With dependents</label>
+                  <input class="segment-input" id="dependency-without" type="radio" name="dependency" value="without">
+                  <label class="segment" for="dependency-without">Without dependents</label>
+                </div>
+              </div>
+
+              <p class="selected-station">Selected installation<strong id="selected-station">Naval Station Norfolk</strong></p>
+            </div>
+
+            <div class="result" aria-live="polite" aria-atomic="true">
+              <div class="result-main">
+                <p class="result-kicker">Estimated monthly BAH</p>
+                <div class="monthly-row"><span class="monthly" id="monthly">$2,430</span><span class="per-month">/ month</span></div>
+                <p class="annual"><strong id="annual">$29,160</strong> per year</p>
+                <p class="difference"><span class="difference-dot" aria-hidden="true"></span><span id="difference">With dependents is $522 more per month for this pay grade.</span></p>
+              </div>
+              <div class="result-details">
+                <div class="result-detail"><span class="detail-label">Housing area</span><span class="detail-value" id="housing-area">Norfolk/Portsmouth, VA</span></div>
+                <div class="result-detail"><span class="detail-label">Duty ZIP used</span><span class="detail-value" id="duty-zip">23511</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="notes" aria-label="Important BAH information">
+          <p><strong>Important:</strong> BAH is based on the permanent duty station ZIP code—not the ZIP where the service member chooses to live. “With dependents” and “without dependents” are the two standard rate categories; the number of dependents does not change the published rate.</p>
+          <p>This calculator is an estimate using the official 2026 Defense Travel Management Office rate file effective January 1, 2026. Individual rate protection or a change in assignment, grade, or dependency status can affect the amount actually paid. Verify entitlement with your finance office or the <a href="https://www.travel.dod.mil/Allowances/Basic-Allowance-for-Housing/BAH-Rate-Lookup/" target="_blank" rel="noopener noreferrer">official DoD BAH lookup</a>.</p>
+        </aside>
+
+        <section class="cta" aria-label="Virginia military relocation resources">
+          <div>
+            <h2>Planning a PCS to Central or Eastern Virginia?</h2>
+            <p>Explore Adam Garrett’s local military resources and home-buying guidance.</p>
+          </div>
+          <div class="cta-links">
+            <a class="cta-link primary" href="https://www.abgre.com/military-resource" target="_blank" rel="noopener noreferrer">Military resources</a>
+            <a class="cta-link" href="https://www.abgre.com/contact" target="_blank" rel="noopener noreferrer">Contact Adam</a>
+          </div>
+        </section>
+      </div>
+
+      <footer class="footer">Prepared for ABGRE.com · Rates are informational estimates, not a determination of military pay entitlement.</footer>
+    </article>
+  </main>
+
+  <script>
+    const GRADES = [
+      "E-1", "E-2", "E-3", "E-4", "E-5", "E-6", "E-7", "E-8", "E-9",
+      "W-1", "W-2", "W-3", "W-4", "W-5", "O-1E", "O-2E", "O-3E",
+      "O-1", "O-2", "O-3", "O-4", "O-5", "O-6", "O-7+"
+    ];
+
+    // Official DTMO 2026 ASCII rate file. Arrays follow the GRADES order above.
+    const RATES = {
+      VA295: {
+        label: "Charlottesville, VA",
+        with: [2259,2259,2259,2259,2373,2715,2835,2964,3129,2733,2889,3048,3156,3291,2856,3024,3177,2421,2712,3045,3333,3540,3567,3594],
+        without: [1845,1845,1845,1845,2034,2151,2259,2445,2541,2232,2442,2556,2739,2865,2370,2520,2706,2142,2340,2589,2838,2907,3027,3081]
+      },
+      VA296: {
+        label: "Quantico/Woodbridge, VA",
+        with: [2730,2730,2730,2730,2955,3174,3228,3288,3444,3192,3252,3330,3489,3687,3234,3315,3519,2991,3171,3327,3753,4065,4098,4128],
+        without: [2109,2109,2109,2109,2361,2523,2739,3006,3060,2661,3003,3072,3180,3240,2952,3048,3165,2499,2883,3090,3222,3252,3306,3363]
+      },
+      VA297: {
+        label: "Hampton/Newport News, VA",
+        with: [2082,2082,2082,2082,2274,2421,2439,2457,2571,2436,2445,2478,2610,2778,2442,2466,2637,2301,2418,2475,2835,3099,3123,3144],
+        without: [1599,1599,1599,1599,1779,1905,2088,2310,2343,2022,2307,2349,2415,2439,2271,2334,2409,1884,2214,2361,2427,2442,2451,2493]
+      },
+      VA298: {
+        label: "Norfolk/Portsmouth, VA",
+        with: [2229,2229,2229,2229,2430,2559,2604,2661,2796,2574,2628,2697,2832,3000,2613,2685,2859,2454,2556,2694,3054,3318,3342,3366],
+        without: [1707,1707,1707,1707,1908,2043,2235,2463,2487,2166,2460,2496,2562,2616,2427,2481,2547,2022,2367,2505,2601,2625,2673,2718]
+      },
+      VA301: {
+        label: "Richmond/Fort Lee, VA",
+        with: [2157,2157,2157,2157,2358,2628,2676,2727,2835,2646,2694,2763,2862,2991,2682,2751,2883,2400,2625,2760,3030,3231,3255,3276],
+        without: [1728,1728,1728,1728,1866,1971,2163,2418,2490,2094,2415,2502,2631,2685,2355,2475,2619,1950,2295,2526,2670,2694,2739,2784]
+      },
+      VA368: {
+        label: "Dahlgren/Fort A.P. Hill",
+        with: [2307,2307,2307,2307,2313,2715,2763,2811,2955,2733,2781,2847,2997,3183,2766,2835,3027,2367,2712,2844,3243,3534,3564,3588],
+        without: [2013,2013,2013,2013,2196,2304,2325,2397,2514,2322,2394,2529,2721,2772,2331,2487,2706,2301,2328,2568,2757,2781,2823,2871]
+      },
+      ZZ710: {
+        label: "County Cost Group 710",
+        with: [1404,1404,1404,1404,1515,1818,1890,1968,2082,1836,1920,2019,2106,2220,1902,2004,2124,1560,1815,2016,2253,2424,2442,2454],
+        without: [1128,1128,1128,1128,1227,1362,1419,1581,1665,1380,1578,1677,1830,1905,1512,1644,1809,1293,1482,1704,1887,1926,1998,2028]
+      }
+    };
+
+    const INSTALLATIONS = [
+      { id: "naval-station-norfolk", name: "Naval Station Norfolk", short: "Norfolk", region: "hampton", zip: "23511", mha: "VA298" },
+      { id: "nas-oceana", name: "Naval Air Station Oceana", short: "Virginia Beach", region: "hampton", zip: "23460", mha: "VA298" },
+      { id: "jeb-little-creek-fort-story", name: "JEB Little Creek–Fort Story", short: "Virginia Beach", region: "hampton", zip: "23459", mha: "VA298" },
+      { id: "jble-langley", name: "Joint Base Langley–Eustis · Langley", short: "Hampton", region: "hampton", zip: "23665", mha: "VA297" },
+      { id: "jble-eustis", name: "Joint Base Langley–Eustis · Fort Eustis", short: "Newport News", region: "hampton", zip: "23604", mha: "VA297" },
+      { id: "nsa-hampton-roads", name: "Naval Support Activity Hampton Roads", short: "Norfolk", region: "hampton", zip: "23551", mha: "VA298" },
+      { id: "naval-medical-center-portsmouth", name: "Naval Medical Center Portsmouth", short: "Portsmouth", region: "hampton", zip: "23708", mha: "VA298" },
+      { id: "norfolk-naval-shipyard", name: "Norfolk Naval Shipyard", short: "Portsmouth", region: "hampton", zip: "23709", mha: "VA298" },
+      { id: "nws-yorktown", name: "Naval Weapons Station Yorktown", short: "York County", region: "hampton", zip: "23691", mha: "VA297" },
+      { id: "cheatham-annex", name: "NWS Yorktown · Cheatham Annex", short: "Williamsburg", region: "hampton", zip: "23185", mha: "VA297" },
+      { id: "cg-training-yorktown", name: "Coast Guard Training Center Yorktown", short: "York County", region: "hampton", zip: "23690", mha: "VA297" },
+      { id: "cg-base-portsmouth", name: "Coast Guard Base Portsmouth", short: "Portsmouth", region: "hampton", zip: "23703", mha: "VA298" },
+      { id: "nsa-northwest-annex", name: "NSA Hampton Roads · Northwest Annex", short: "Chesapeake", region: "hampton", zip: "23322", mha: "VA298" },
+
+      { id: "fort-lee", name: "Fort Lee", short: "Prince George County", region: "central", zip: "23801", mha: "VA301" },
+      { id: "defense-supply-center-richmond", name: "Defense Supply Center Richmond", short: "Chesterfield County", region: "central", zip: "23237", mha: "VA301" },
+      { id: "fort-pickett", name: "Fort Pickett", short: "Blackstone", region: "central", zip: "23824", mha: "ZZ710" },
+      { id: "fort-ap-hill", name: "Fort A.P. Hill", short: "Caroline County", region: "central", zip: "22427", mha: "VA368" },
+      { id: "nsf-dahlgren", name: "Naval Support Facility Dahlgren", short: "King George County", region: "central", zip: "22448", mha: "VA368" },
+      { id: "mcb-quantico", name: "Marine Corps Base Quantico", short: "Prince William/Stafford", region: "central", zip: "22134", mha: "VA296" },
+      { id: "rivanna-station", name: "Rivanna Station", short: "Albemarle County", region: "central", zip: "22911", mha: "VA295" },
+      { id: "vng-jfhq", name: "Virginia National Guard Joint Force HQ", short: "Sandston", region: "central", zip: "23150", mha: "VA301" }
+    ];
+
+    const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    const compactCurrency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+    const installationGrid = document.getElementById("installations");
+    const gradeSelect = document.getElementById("grade");
+    const monthlyEl = document.getElementById("monthly");
+    const annualEl = document.getElementById("annual");
+    const differenceEl = document.getElementById("difference");
+    const selectedStationEl = document.getElementById("selected-station");
+    const housingAreaEl = document.getElementById("housing-area");
+    const dutyZipEl = document.getElementById("duty-zip");
+
+    const params = new URLSearchParams(window.location.search);
+    const requestedInstallation = INSTALLATIONS.find(item => item.id === params.get("installation"));
+    const requestedGrade = GRADES.includes(params.get("grade")) ? params.get("grade") : "E-5";
+    const requestedDependency = ["with", "without"].includes(params.get("dependents")) ? params.get("dependents") : "with";
+
+    let selectedInstallation = requestedInstallation || INSTALLATIONS[0];
+    let selectedRegion = selectedInstallation.region;
+    let dependency = requestedDependency;
+    gradeSelect.value = requestedGrade;
+
+    function renderInstallations() {
+      installationGrid.innerHTML = "";
+      INSTALLATIONS.filter(item => item.region === selectedRegion).forEach(item => {
+        const button = document.createElement("button");
+        button.className = "installation";
+        button.type = "button";
+        button.dataset.id = item.id;
+        button.setAttribute("aria-pressed", String(item.id === selectedInstallation.id));
+        button.innerHTML = `<span class="installation-name">${item.name}</span><span class="installation-meta">${item.short}</span>`;
+        button.addEventListener("click", () => {
+          selectedInstallation = item;
+          updateResult();
+          renderInstallations();
+        });
+        installationGrid.appendChild(button);
+      });
+    }
+
+    function updateTabs() {
+      document.querySelectorAll(".region-tab").forEach(tab => {
+        const active = tab.dataset.region === selectedRegion;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+      });
+      const activeTab = document.querySelector(`.region-tab[data-region="${selectedRegion}"]`);
+      installationGrid.setAttribute("aria-labelledby", activeTab.id);
+    }
+
+    function updateDependencyButtons() {
+      document.querySelectorAll(".segment-input").forEach(input => {
+        input.checked = input.value === dependency;
+      });
+    }
+
+    function updateUrl() {
+      const url = new URL(window.location.href);
+      url.searchParams.set("installation", selectedInstallation.id);
+      url.searchParams.set("grade", gradeSelect.value);
+      url.searchParams.set("dependents", dependency);
+      window.history.replaceState({}, "", url);
+    }
+
+    function updateResult() {
+      const gradeIndex = GRADES.indexOf(gradeSelect.value);
+      const rateArea = RATES[selectedInstallation.mha];
+      const monthly = rateArea[dependency][gradeIndex];
+      const withRate = rateArea.with[gradeIndex];
+      const withoutRate = rateArea.without[gradeIndex];
+      const difference = withRate - withoutRate;
+
+      monthlyEl.textContent = currency.format(monthly);
+      annualEl.textContent = currency.format(monthly * 12);
+      selectedStationEl.textContent = selectedInstallation.name;
+      housingAreaEl.textContent = `${rateArea.label} (${selectedInstallation.mha})`;
+      dutyZipEl.textContent = selectedInstallation.zip;
+      differenceEl.textContent = difference === 0
+        ? "The published with- and without-dependent rates are equal for this selection."
+        : `With dependents is ${compactCurrency.format(difference)} more per month for this pay grade.`;
+
+      updateDependencyButtons();
+      updateUrl();
+      sendHeight();
+    }
+
+    function sendHeight() {
+      window.requestAnimationFrame(() => {
+        window.parent.postMessage({ type: "abgre-bah-resize", height: document.documentElement.scrollHeight }, "*");
+      });
+    }
+
+    document.querySelectorAll(".region-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        selectedRegion = tab.dataset.region;
+        const selectedVisible = selectedInstallation.region === selectedRegion;
+        if (!selectedVisible) selectedInstallation = INSTALLATIONS.find(item => item.region === selectedRegion);
+        updateTabs();
+        renderInstallations();
+        updateResult();
+      });
+    });
+
+    document.querySelectorAll(".segment-input").forEach(input => {
+      input.addEventListener("change", () => {
+        dependency = input.value;
+        updateResult();
+      });
+    });
+
+    gradeSelect.addEventListener("change", updateResult);
+    window.addEventListener("resize", sendHeight);
+
+    updateTabs();
+    renderInstallations();
+    updateResult();
+  </script>
+</body>
+</html>
